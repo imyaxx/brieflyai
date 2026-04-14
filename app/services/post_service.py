@@ -3,10 +3,12 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.post import Post
 from app.schemas.post import PostCreate, PostUpdate
 from app.services.ai_service import generate_summary
+from bot.notifications import notify_subscribers
 
 
 async def create_post(db: AsyncSession, author_id: uuid.UUID, data: PostCreate) -> Post:
@@ -19,7 +21,13 @@ async def create_post(db: AsyncSession, author_id: uuid.UUID, data: PostCreate) 
     )
     db.add(post)
     await db.commit()
-    await db.refresh(post)
+
+    post = await db.scalar(
+        select(Post)
+        .where(Post.id == post.id)
+        .options(selectinload(Post.author))
+    )
+    await notify_subscribers(post, db)
     return post
 
 
